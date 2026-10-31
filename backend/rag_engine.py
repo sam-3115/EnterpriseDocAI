@@ -315,15 +315,24 @@ ANSWER (Strictly based on above context passages with inline citations):"""
     # 3. Parse confidence and contradictions
     parsed_meta = parse_confidence_and_contradiction(answer_text)
 
-    # 4. Filter sources to only include those actually cited in the answer
+    # 4. Strict Citation Filtering: Only keep sources that were actually used/cited in the answer
     import re
     cited_ids = set()
-    # Match patterns like [Source 1], [Source 2], etc.
-    for match in re.finditer(r'\[Source\s+(\d+)\]', answer_text):
+    # Match patterns like [Source 1], [Source 2], Source 1, [1], etc.
+    for match in re.finditer(r'\[Source\s+(\d+)\]', answer_text, re.IGNORECASE):
         cited_ids.add(int(match.group(1)))
-    # Also match [Doc: filename, Page N] style citations
+    for match in re.finditer(r'(?:^|[^\w])Source\s+(\d+)(?:[^\w]|$)', answer_text, re.IGNORECASE):
+        cited_ids.add(int(match.group(1)))
+    for match in re.finditer(r'\[(\d+)\]', answer_text):
+        cited_ids.add(int(match.group(1)))
+
+    # Also match explicit mentions of document filenames in the generated text
     cited_filenames = set()
-    for match in re.finditer(r'\[Doc:\s*([^,\]]+)', answer_text):
+    for s in sources:
+        fname = s.get("filename", "")
+        if fname and fname.lower() in answer_text.lower():
+            cited_filenames.add(fname.lower())
+    for match in re.finditer(r'\[Doc:\s*([^,\]]+)', answer_text, re.IGNORECASE):
         cited_filenames.add(match.group(1).strip().lower())
 
     if cited_ids or cited_filenames:
@@ -332,14 +341,21 @@ ANSWER (Strictly based on above context passages with inline citations):"""
             if s["source_id"] in cited_ids
             or s.get("filename", "").lower() in cited_filenames
         ]
-        # Fall back to all sources if filter yields nothing (safety net)
         if cited_sources:
             sources = cited_sources
     else:
-        # No citations found in answer — likely a "not found" or greeting response
-        # Don't show irrelevant sources
-        if parsed_meta["confidence"] == "None" or "could not find sufficient information" in answer_text.lower():
-            sources = []
+        # If the answer is unanswerable or no sources were cited, show NO sources
+        # (Never dump all retrieved chunks if none was referenced)
+        if (
+            parsed_meta["confidence"] == "None" 
+            or "could not find sufficient information" in answer_text.lower()
+            or not cited_ids
+        ):
+            # If the model produced an answer without formal citations, keep only top 1 relevant source as reference
+            if "could not find sufficient information" in answer_text.lower() or parsed_meta["confidence"] == "None":
+                sources = []
+            else:
+                sources = sources[:1] if sources else []
 
     return {
         "query": query,
