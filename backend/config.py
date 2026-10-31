@@ -31,5 +31,5 @@ CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
 # Models
 EMBEDDING_MODEL_NAME = "models/text-embedding-004"
-LLM_MODEL_NAME = "gemini-1.5-flash"
+LLM_MODEL_NAME = "gemini-2.5-flash"
 
