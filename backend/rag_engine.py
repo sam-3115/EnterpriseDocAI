@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from backend.config import GEMINI_API_KEY
 from backend.retrieval import hybrid_retrieve
 
-LLM_MODEL = "gemini-1.5-flash"
+LLM_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = """You are EnterpriseDoc AI, an intelligent, authoritative Enterprise Documentation Assistant.
 
