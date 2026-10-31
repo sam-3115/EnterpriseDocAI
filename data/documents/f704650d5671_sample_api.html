@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise API Documentation</title>
+</head>
+<body>
+    <h1>Enterprise Authentication API</h1>
+    <p>This API specification describes authentication endpoints and authorization flows supported across all internal enterprise services.</p>
+    
+    <h2>Token Generation</h2>
+    <p>Users must submit valid credentials to the login route. Upon verification, the service returns a session object including user role and permission scopes.</p>
+    
+    <h2>Rate Limiting and Quotas</h2>
+    <p>All endpoints enforce rate limits of 100 requests per minute per IP address. Exceeding this quota triggers an HTTP 429 Too Many Requests response.</p>
+</body>
+</html>
+

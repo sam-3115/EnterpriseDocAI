@@ -1,0 +1,11 @@
+Acme Corp Enterprise Policy Handbook
+
+Employee Benefits and Paid Time Off
+Employees are entitled to 20 days of paid time off per calendar year. Unused days up to 5 days can be carried forward to the following quarter. All leave requests must be submitted through the enterprise HR portal at least two weeks in advance.
+
+Remote Work and Core Hours
+Acme Corp operates on a hybrid working model. Team members are expected to be available during core hours between 10:00 AM and 4:00 PM EST. Regular sync meetings occur on Monday mornings.
+
+Information Security and Data Protection
+All company laptops must run full-disk encryption and multi-factor authentication (MFA). Sharing customer documentation or source code via unapproved personal cloud drives is strictly prohibited and subject to immediate disciplinary review.
+
