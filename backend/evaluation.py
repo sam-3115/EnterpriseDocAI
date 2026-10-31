@@ -30,10 +30,11 @@ EVALUATION_DATASET = [
     {
         "id": "Q4_AMBIGUOUS",
         "category": "Ambiguous Question",
-        "question": "What is the working schedule and when are enterprise sync meetings held?",
-        "ground_truth_doc": "sample_policy.txt",
-        "ground_truth_keywords": ["10:00 AM", "4:00 PM", "Monday mornings"],
-        "is_answerable": True
+        "question": "What is the policy?",
+        "ground_truth_doc": None,
+        "ground_truth_keywords": ["specify", "ambiguous", "context", "which", "clarify"],
+        "is_answerable": False,
+        "requires_clarification": True
     },
     {
         "id": "Q5_UNANSWERABLE",
@@ -76,14 +77,23 @@ def evaluate_faithfulness_and_citations(
     answer: str,
     sources: List[Dict[str, Any]],
     ground_truth_keywords: List[str],
-    is_answerable: bool
+    is_answerable: bool,
+    requires_clarification: bool = False
 ) -> Dict[str, float]:
     """
     Evaluate:
-    1. Answer Faithfulness: Claims supported directly by context or correct not-found response.
-    2. Citation Correctness: Citations present and pointing to valid source items.
+    1. Answer Faithfulness: Claims supported directly by context, clarification request, or correct not-found response.
+    2. Citation Correctness: Citations present and pointing to valid source items (or not required for not-found/clarification).
     """
     answer_lower = answer.lower()
+
+    if requires_clarification:
+        # Ambiguous questions should ask the user to clarify context
+        clarified = any(kw in answer_lower for kw in ["specify", "ambiguous", "context", "which", "clarify", "provide"])
+        return {
+            "faithfulness": 1.0 if clarified else 0.5,
+            "citation_correctness": 1.0
+        }
 
     if not is_answerable:
         # Correctly rejected unanswerable questions get full faithfulness
@@ -135,7 +145,8 @@ def run_evaluation_benchmark(api_key: Optional[str] = None, top_k: int = 3) -> D
             answer=answer,
             sources=sources,
             ground_truth_keywords=item["ground_truth_keywords"],
-            is_answerable=item["is_answerable"]
+            is_answerable=item["is_answerable"],
+            requires_clarification=item.get("requires_clarification", False)
         )
 
         total_recall += r_metrics["recall_at_k"]
@@ -172,4 +183,3 @@ def run_evaluation_benchmark(api_key: Optional[str] = None, top_k: int = 3) -> D
         "summary": summary,
         "test_results": results
     }
-

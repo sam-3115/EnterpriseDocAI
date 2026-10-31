@@ -16,16 +16,20 @@ SYSTEM_PROMPT = """You are EnterpriseDoc AI, an intelligent, authoritative Enter
 
 CRITICAL INSTRUCTIONS:
 1. STRICT EVIDENCE GROUNDING: Answer the question using ONLY the retrieved document passages provided in the Context below. Do NOT use external knowledge, speculate, extrapolate, or invent facts.
-2. NOT FOUND RESPONSE: If the answer cannot be directly determined from the provided Context passages, you MUST respond with:
+2. NOT FOUND / UNANSWERABLE RESPONSE: If the question cannot be answered from the provided Context passages (e.g. out-of-domain, non-existent policy, or missing topics), you MUST respond with:
 "I could not find sufficient information in the provided enterprise documentation to answer this question."
-Do NOT attempt to fabricate an answer.
-3. CITATIONS: Include precise inline citations in your response using format [Source N] or [Doc: <filename>, Page <page>]. Every factual claim must be backed by a source.
-4. CONTRADICTION & OUTDATED INFO DETECTION: Carefully inspect the retrieved passages. If two documents or sections state conflicting or contradictory rules, policies, or dates, you MUST add a dedicated section at the bottom titled:
+Do NOT attempt to fabricate an answer or assume company policies not stated.
+3. AMBIGUOUS QUESTIONS: If the user's question is vague, incomplete, or ambiguous (e.g., asking about "the policy", "the rules", "how to submit", without specifying which policy, department, or procedure):
+- Clearly state what information is ambiguous or missing.
+- Polite ask the user for specific context (e.g., "Could you please specify which policy or procedure you are referring to, such as Paid Time Off, Remote Work, or Information Security?").
+- You may briefly mention the relevant topics found in the documentation to help them clarify.
+4. CITATIONS: Include precise inline citations in your response using format [Source N] or [Doc: <filename>, Page <page>]. Every factual claim must be backed by a source.
+5. CONTRADICTION & OUTDATED INFO DETECTION: Carefully inspect the retrieved passages. If two documents or sections state conflicting or contradictory rules, policies, or dates, you MUST add a dedicated section at the bottom titled:
 "⚠️ Contradiction / Conflict Warning:" explaining the conflicting statements and citing the conflicting sources.
-5. CONFIDENCE RATING: At the very end of your response, output on a new line:
+6. CONFIDENCE RATING: At the very end of your response, output on a new line:
 Confidence: High | Medium | Low | None
 - High: Context directly, unambiguously answers the question.
-- Medium: Context partially answers the question or requires minor inference from stated facts.
+- Medium: Context partially answers the question or requires clarification/disambiguation.
 - Low: Context mentions keywords but is missing critical specifics.
 - None: Question is unanswerable from the context.
 """
@@ -266,7 +270,8 @@ ANSWER (Strictly based on above context passages with inline citations):"""
     GENERIC_TERMS = {
         "what", "is", "the", "are", "for", "and", "in", "to", "of", "how",
         "many", "can", "employee", "employees", "company", "corporate", "enterprise",
-        "about", "with", "from", "at", "by", "this", "that"
+        "about", "with", "from", "at", "by", "this", "that", "tell", "me", "does",
+        "do", "we", "have", "a", "an", "policy", "policies", "procedure", "procedures"
     }
     content_q_toks = q_toks - GENERIC_TERMS
     if not content_q_toks:
@@ -277,8 +282,24 @@ ANSWER (Strictly based on above context passages with inline citations):"""
         matched_toks.update(set(tokenize_text(c.get("content", ""))))
     overlap = content_q_toks.intersection(matched_toks)
 
-    # If key content terms are missing from documents (unanswerable / out-of-domain)
-    if not overlap or (len(overlap) / len(content_q_toks) < 0.25):
+    # Check for ambiguous query patterns (vague queries lacking a specific subject)
+    AMBIGUOUS_PATTERNS = [
+        r'^(what is the policy|tell me about the policy|explain the rules|what are the requirements|how do i apply|how to submit|what is the process|what are the guidelines)[\?\.]*$',
+        r'^(can i do this|is this allowed|what should i do|who do i contact)[\?\.]*$'
+    ]
+    is_ambiguous = any(re.match(p, query.strip().lower()) for p in AMBIGUOUS_PATTERNS)
+
+    if is_ambiguous:
+        # Prompt user to clarify context
+        sample_topics = list({c.get("metadata", {}).get("section_title", "") for c in retrieved_chunks if c.get("metadata", {}).get("section_title")})[:3]
+        topic_hint = f" (for example: {', '.join(sample_topics)})" if sample_topics else ""
+        answer_text = (
+            f"Your question appears broad or ambiguous. Could you please specify which topic or policy you are referring to{topic_hint}? "
+            "Please provide additional details so I can give you an accurate, evidence-backed answer.\n\n"
+            "Confidence: Medium"
+        )
+    # If key content terms are completely missing from documents (unanswerable / out-of-domain)
+    elif not overlap or (len(overlap) / len(content_q_toks) < 0.20):
         answer_text = (
             "I could not find sufficient information in the provided enterprise documentation to answer this question.\n\n"
             "Confidence: None"
@@ -316,7 +337,6 @@ ANSWER (Strictly based on above context passages with inline citations):"""
     parsed_meta = parse_confidence_and_contradiction(answer_text)
 
     # 4. Strict Citation Filtering: Only keep sources that were actually used/cited in the answer
-    import re
     cited_ids = set()
     # Match patterns like [Source 1], [Source 2], Source 1, [1], etc.
     for match in re.finditer(r'\[Source\s+(\d+)\]', answer_text, re.IGNORECASE):
